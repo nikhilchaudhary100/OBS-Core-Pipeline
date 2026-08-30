@@ -34,7 +34,14 @@ def parse_log_line(line):
             
             if not clean_value:
                 raise ValueError(f"Missing data value for metric: {clean_key}")
-                
+            # Catches explicit hardware/software error flags (e.g., ERR_#$@%^ppm, ERR_504_TIMEOUT)
+            if clean_value.startswith("ERR_") or "ERR_" in clean_value:
+                raise ValueError(f"Corrupted sensor value detected for {clean_key}: '{clean_value}'")
+            # Catches missing/incomplete readings (e.g., Temp: C, PM2.5: ug/m3)
+            if not any(char.isdigit() for char in clean_value):
+                raise ValueError(f"Missing numeric measurement for {clean_key}: '{clean_value}'")
+            
+            
             metrics_dict[clean_key] = clean_value
             
         # If we made it here, the data is perfect!

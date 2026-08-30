@@ -1,7 +1,23 @@
 import argparse
 import time
-# from parser import parse_log_line
-# from analyzer import analyze_logs
+from src.parser import parse_log_line
+from src.error_handler import log_to_dlq
+from src.analyzer import analyze_logs
+
+def stream_and_filter_logs(file_path):
+    """
+    Reads the raw log file line-by-line:
+    - Routes corrupted logs directly to disk via log_to_dlq()
+    - Yields clean parsed dictionaries to the analyzer stream
+    """
+    with open(file_path, "r") as log_file:
+        for line in log_file:
+            result = parse_log_line(line)
+            if result["status"] == "error":
+                log_to_dlq(result)
+            else:
+                yield result
+
 
 def main():
     # 1. Set up the Argument Parser
@@ -18,16 +34,25 @@ def main():
     print(f"Initializing Observability Pipeline...")
     print(f"Target File: {args.file}")
     
-    # 4. Start the stopwatch
+    # Start the stopwatch
     start_time = time.time()
     
-    # 5. Bridge to the Core Engine (This is where we connect the dots)
+    # Bridge to the Core Engine (This is where we connect the dots)
     if args.detect_spikes:
         print(f"Spike detection activated for {args.sensor}...")
-        # our parser and analyzer will running here:
-        # parsed_stream = (parse_log_line(line) for line in open(args.file))
-        # avg_pm25, alarms = analyze_logs(parsed_stream, target_sensor=args.sensor)
-    
+
+        # Create generator stream (routes errors to DLQ, yields clean logs)
+        clean_stream = stream_and_filter_logs(args.file)
+
+        # Stream directly into analyzer
+        avg_pm25, alarms = analyze_logs(clean_stream)
+        
+    print("\n📊 --- Analytics Results ---")
+    print(f"Average PM2.5 for {args.sensor}: {avg_pm25:.2f}")
+    print(f"Alarms Triggered ({len(alarms)}):")
+    for alarm in alarms:
+        print(f"  {alarm}")
+
     # 6. Stop the stopwatch
     end_time = time.time()
     
